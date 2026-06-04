@@ -64,6 +64,7 @@ jobs:
 
       - name: Inject tag version into package.json
         working-directory: electron
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Building version: $VERSION"
@@ -79,6 +80,7 @@ jobs:
 
       - name: Check if tag is a pre-release
         id: check-prerelease
+        shell: bash
         run: |
           if [[ "${{ github.ref_name }}" =~ -[a-zA-Z] ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
