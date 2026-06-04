@@ -204,11 +204,11 @@ function scheduleAuto() {
 }
 
 // Click-through: window is transparent to clicks by default.
-// Only become interactive when mouse is directly over the pet container.
-container.addEventListener('mouseenter', () => {
+// Only become interactive when mouse is directly over the pet image.
+img.addEventListener('mouseenter', () => {
   if (window.petBridge) window.petBridge.setIgnoreMouseEvents(false);
 });
-container.addEventListener('mouseleave', () => {
+img.addEventListener('mouseleave', () => {
   if (!dragging && !selector.classList.contains('show') && window.petBridge) {
     window.petBridge.setIgnoreMouseEvents(true);
   }
@@ -248,11 +248,11 @@ if (window.petBridge) {
   });
 }
 
-// Toggle (hide) button
+// Toggle (close) button — properly close the pet window
 document.getElementById('toggle-btn').addEventListener('click', (e) => {
   e.stopPropagation();
   if (window.petBridge) {
-    window.petBridge.moveWindow(-9999, -9999); // Move off-screen to "hide"
+    window.petBridge.close(); // Properly close the pet window instead of hiding off-screen
   }
 });
 

@@ -229,7 +229,7 @@ function createPetWindow() {
     petWindow.setOpacity(0.99);
     setTimeout(() => { if (petWindow) petWindow.setOpacity(1); }, 50);
     // Rebuild tray menu to show correct pet state (hide/show/close)
-    if (tray) createTray();
+    if (tray && !isQuitting) createTray();
   });
 
   // Walk: main process moves window periodically
@@ -251,9 +251,9 @@ function createPetWindow() {
 
   // 'closed' event: petWindow was destroyed — cleanup references only
   // (actual timer cleanup is done in closePet() before destroy())
-  petWindow.on('closed', () => { 
-    petWindow = null; 
-    if (tray) createTray(); 
+  petWindow.on('closed', () => {
+    petWindow = null;
+    if (tray && !isQuitting) createTray();
   });
 
   // User activity detection for curious state
@@ -287,8 +287,12 @@ function closePet(destroy = true) {
     petWindow.destroy();
     // 'closed' event will set petWindow = null and rebuild tray
   } else {
+    // Hide: reset walk/drag state so pet doesn't resume on show
+    walkDir = 0;
+    petDragging = false;
+    clearInterval(dragTimer);
     petWindow.hide();
-    if (tray) createTray();
+    if (tray && !isQuitting) createTray();
   }
 }
 
@@ -307,12 +311,22 @@ function createTray() {
       if (petWindow.isVisible()) {
         menuItems.push({ label: '隐藏宠物', click: () => closePet(false) });
       } else {
-        menuItems.push({ label: '显示宠物', click: () => { petWindow.show(); if (tray) createTray(); } });
+        menuItems.push({ label: '显示宠物', click: () => {
+          petWindow.show();
+          // Recover off-screen pet (e.g. from old moveWindow(-9999,-9999) hack)
+          const bounds = petWindow.getBounds();
+          if (bounds.x < -9000 || bounds.y < -9000) {
+            const { screen } = require('electron');
+            const display = screen.getPrimaryDisplay();
+            petWindow.setBounds({ x: display.bounds.width - 250, y: display.bounds.height - 250, width: bounds.width, height: bounds.height });
+          }
+          if (tray && !isQuitting) createTray();
+        } });
       }
       menuItems.push({ label: '彻底关闭宠物', click: () => closePet(true) });
     } else {
       // No pet window
-      menuItems.push({ label: '显示宠物', click: () => { createPetWindow(); if (tray) createTray(); } });
+      menuItems.push({ label: '显示宠物', click: () => { createPetWindow(); /* ready-to-show will rebuild tray */ } });
     }
 
     menuItems.push(
@@ -358,10 +372,11 @@ ipcMain.on('pet-close', () => {
 ipcMain.on('pet-toggle', () => {
   if (petWindow && !petWindow.isDestroyed()) {
     closePet(true);
+    // closed event will rebuild tray
   } else {
     createPetWindow();
+    // ready-to-show will rebuild tray
   }
-  if (tray) createTray();
 });
 
 ipcMain.handle('pet-move-window', (_, x, y) => {
@@ -425,6 +440,7 @@ function setupAutoUpdater() {
   try { autoUpdater = require('electron-updater').autoUpdater; } catch (e) { console.warn('Auto-updater not available:', e.message); return; }
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('update-available', (info) => {
     if (mainWindow) {
@@ -495,8 +511,7 @@ app.whenReady().then(async () => {
   createTray();
   createWindow();
   createPetWindow();
-  // Rebuild tray after pet is created to show correct pet state menu
-  if (tray) createTray();
+  // ready-to-show event will rebuild tray with correct pet state menu
   setupAutoUpdater();
 });
 
@@ -511,7 +526,7 @@ app.on('activate', () => {
 
 app.on('before-quit', (e) => {
   isQuitting = true;
-  if (petWindow) { petWindow.destroy(); petWindow = null; }
+  if (petWindow) { closePet(true); }
   if (backendProcess) {
     try { backendProcess.kill(); } catch {}
     backendProcess = null;
