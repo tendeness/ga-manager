@@ -204,11 +204,11 @@ function scheduleAuto() {
 }
 
 // Click-through: window is transparent to clicks by default.
-// Only become interactive when mouse is directly over the pet image.
-img.addEventListener('mouseenter', () => {
+// Only become interactive when mouse is directly over the pet container.
+container.addEventListener('mouseenter', () => {
   if (window.petBridge) window.petBridge.setIgnoreMouseEvents(false);
 });
-img.addEventListener('mouseleave', () => {
+container.addEventListener('mouseleave', () => {
   if (!dragging && !selector.classList.contains('show') && window.petBridge) {
     window.petBridge.setIgnoreMouseEvents(true);
   }

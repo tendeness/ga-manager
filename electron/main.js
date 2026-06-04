@@ -15,6 +15,14 @@ let isQuitting = false;
 let petWindow = null;
 let petState = 'idle'; // idle | curious | working | done
 let userWasIdle = true;
+let walkDir = 0;
+let petDragging = false;
+let dragTimer = null;
+let walkTimer = null;
+let idleTimer = null;
+let walkSpeed = 1;
+let dragOffsetX = 0, dragOffsetY = 0;
+let lastCuriousTime = 0;
 
 function getBackendPath() {
   const isPackaged = app.isPackaged;
@@ -131,7 +139,61 @@ function createWindow() {
   });
 }
 
+// ============ Pet IPC handlers (registered once globally, outside createPetWindow) ============
+function registerPetIPC() {
+  ipcMain.on('pet-ignore-mouse', (_, ignore) => {
+    if (!petWindow) return;
+    if (ignore) {
+      petWindow.setIgnoreMouseEvents(true, { forward: true });
+    } else {
+      petWindow.setIgnoreMouseEvents(false);
+    }
+  });
+
+  ipcMain.on('pet-walk-start', (_, dir, speed) => {
+    if (!petWindow) return;
+    const [x] = petWindow.getPosition();
+    const { screen } = require('electron');
+    const display = screen.getPrimaryDisplay();
+    if (dir === -1 && x <= 0) return;
+    if (dir === 1 && x >= display.bounds.width - 200) return;
+    walkDir = dir;
+    walkSpeed = Math.max(2, Math.round(display.bounds.width / 640));
+  });
+
+  ipcMain.on('pet-walk-stop', () => { walkDir = 0; });
+
+  ipcMain.on('pet-drag-start', () => {
+    if (!petWindow) return;
+    petDragging = true;
+    walkDir = 0;
+    const { screen } = require('electron');
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = petWindow.getBounds();
+    dragOffsetX = cursor.x - bounds.x;
+    dragOffsetY = cursor.y - bounds.y;
+    dragTimer = setInterval(() => {
+      if (!petWindow || !petDragging) return;
+      const { screen } = require('electron');
+      const cur = screen.getCursorScreenPoint();
+      petWindow.setPosition(cur.x - dragOffsetX, cur.y - dragOffsetY);
+    }, 16);
+  });
+
+  ipcMain.on('pet-drag-end', () => {
+    petDragging = false;
+    clearInterval(dragTimer);
+    if (petWindow) petWindow.setIgnoreMouseEvents(true, { forward: true });
+  });
+}
+
 function createPetWindow() {
+  // 🛡️ Guard: prevent duplicate pet windows
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.show();
+    return;
+  }
+
   const { screen } = require('electron');
   const display = screen.getPrimaryDisplay();
   const savedPos = { x: display.bounds.width - 250, y: display.bounds.height - 250 };
@@ -161,28 +223,17 @@ function createPetWindow() {
   // Renderer toggles this when mouse enters/leaves the pet sprite
   petWindow.setIgnoreMouseEvents(true, { forward: true });
 
-  // IPC: toggle click-through
-  ipcMain.on('pet-ignore-mouse', (_, ignore) => {
-    if (!petWindow) return;
-    if (ignore) {
-      petWindow.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      petWindow.setIgnoreMouseEvents(false);
-    }
-  });
-
   // Show after content is ready — prevents black flash on transparent window
   petWindow.once('ready-to-show', () => {
     petWindow.show();
     petWindow.setOpacity(0.99);
     setTimeout(() => { if (petWindow) petWindow.setOpacity(1); }, 50);
+    // Rebuild tray menu to show correct pet state (hide/show/close)
+    if (tray) createTray();
   });
 
   // Walk: main process moves window periodically
-  let walkDir = 0; // -1 left, 0 stop, 1 right
-  let walkSpeed = 1;
-
-  setInterval(() => {
+  walkTimer = setInterval(() => {
     if (!petWindow || walkDir === 0) return;
     try {
       const [x, y] = petWindow.getPosition();
@@ -198,55 +249,15 @@ function createPetWindow() {
     } catch {}
   }, 50);
 
-  ipcMain.on('pet-walk-start', (_, dir, speed) => {
-    if (!petWindow) return;
-    // Don't start walking if already at the edge in that direction
-    const [x] = petWindow.getPosition();
-    const { screen } = require('electron');
-    const display = screen.getPrimaryDisplay();
-    if (dir === -1 && x <= 0) return;
-    if (dir === 1 && x >= display.bounds.width - 200) return;
-    walkDir = dir;
-    // Scale speed to screen width: ~3px/50ms per 1920px, scales up for larger screens
-    walkSpeed = Math.max(2, Math.round(display.bounds.width / 640));
+  // 'closed' event: petWindow was destroyed — cleanup references only
+  // (actual timer cleanup is done in closePet() before destroy())
+  petWindow.on('closed', () => { 
+    petWindow = null; 
+    if (tray) createTray(); 
   });
-
-  ipcMain.on('pet-walk-stop', () => { walkDir = 0; });
-
-  // Drag: main process tracks cursor and moves window
-  let petDragging = false;
-  let dragOffsetX = 0, dragOffsetY = 0;
-  let dragTimer = null;
-
-  ipcMain.on('pet-drag-start', () => {
-    if (!petWindow) return;
-    petDragging = true;
-    walkDir = 0;
-    const { screen } = require('electron');
-    const cursor = screen.getCursorScreenPoint();
-    const bounds = petWindow.getBounds();
-    dragOffsetX = cursor.x - bounds.x;
-    dragOffsetY = cursor.y - bounds.y;
-    dragTimer = setInterval(() => {
-      if (!petWindow || !petDragging) return;
-      const { screen } = require('electron');
-      const cur = screen.getCursorScreenPoint();
-      petWindow.setPosition(cur.x - dragOffsetX, cur.y - dragOffsetY);
-    }, 16);
-  });
-
-  ipcMain.on('pet-drag-end', () => {
-    petDragging = false;
-    clearInterval(dragTimer);
-    // Restore click-through after drag
-    if (petWindow) petWindow.setIgnoreMouseEvents(true, { forward: true });
-  });
-
-  petWindow.on('closed', () => { petWindow = null; walkDir = 0; petDragging = false; clearInterval(dragTimer); if (tray) createTray(); });
 
   // User activity detection for curious state
-  let lastCuriousTime = 0;
-  setInterval(() => {
+  idleTimer = setInterval(() => {
     if (!petWindow || petState === 'working') return;
     const idleTime = powerMonitor.getSystemIdleTime();
     const now = Date.now();
@@ -264,17 +275,21 @@ function createPetWindow() {
 
 function closePet(destroy = true) {
   if (!petWindow) return;
+
   if (destroy) {
+    // 🛡️ Cleanup timers & state BEFORE destroy, so 'closed' event only nullifies reference
+    walkDir = 0;
+    petDragging = false;
+    clearInterval(dragTimer);
+    clearInterval(walkTimer);
+    clearInterval(idleTimer);
+    petState = 'idle';
     petWindow.destroy();
-    petWindow = null;
+    // 'closed' event will set petWindow = null and rebuild tray
   } else {
     petWindow.hide();
+    if (tray) createTray();
   }
-  walkDir = 0;
-  petDragging = false;
-  clearInterval(dragTimer);
-  petState = 'idle';
-  if (tray) createTray();
 }
 
 function createTray() {
@@ -474,9 +489,14 @@ app.whenReady().then(async () => {
     return;
   }
 
+  // Register pet IPC handlers once (avoids duplicate registration on re-create)
+  registerPetIPC();
+
   createTray();
   createWindow();
   createPetWindow();
+  // Rebuild tray after pet is created to show correct pet state menu
+  if (tray) createTray();
   setupAutoUpdater();
 });
 
