@@ -242,7 +242,7 @@ function createPetWindow() {
     if (petWindow) petWindow.setIgnoreMouseEvents(true, { forward: true });
   });
 
-  petWindow.on('closed', () => { petWindow = null; walkDir = 0; petDragging = false; clearInterval(dragTimer); });
+  petWindow.on('closed', () => { petWindow = null; walkDir = 0; petDragging = false; clearInterval(dragTimer); if (tray) createTray(); });
 
   // User activity detection for curious state
   let lastCuriousTime = 0;
@@ -262,20 +262,54 @@ function createPetWindow() {
   }, 3000);
 }
 
+function closePet(destroy = true) {
+  if (!petWindow) return;
+  if (destroy) {
+    petWindow.destroy();
+    petWindow = null;
+  } else {
+    petWindow.hide();
+  }
+  walkDir = 0;
+  petDragging = false;
+  clearInterval(dragTimer);
+  petState = 'idle';
+  if (tray) createTray();
+}
+
 function createTray() {
   const iconPath = getIconPath();
   const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   tray = new Tray(icon);
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: '打开管理面板', click: () => { if (mainWindow) mainWindow.show(); else createWindow(); } },
-    { label: '显示宠物', click: () => { if (petWindow) { petWindow.show(); const { screen } = require('electron'); const display = screen.getPrimaryDisplay(); const bounds = petWindow.getBounds(); if (bounds.x < -9000) petWindow.setBounds({ x: display.bounds.width - 250, y: display.bounds.height - 250, width: bounds.width, height: bounds.height }); } else { createPetWindow(); } } },
-    { type: 'separator' },
-    { label: '退出', click: () => { isQuitting = true; tray = null; app.quit(); } },
-  ]);
+  function buildTrayMenu() {
+    const menuItems = [
+      { label: '打开管理面板', click: () => { if (mainWindow) mainWindow.show(); else createWindow(); } },
+    ];
 
+    if (petWindow && !petWindow.isDestroyed()) {
+      // Pet window exists — show hide/show + close options
+      if (petWindow.isVisible()) {
+        menuItems.push({ label: '隐藏宠物', click: () => closePet(false) });
+      } else {
+        menuItems.push({ label: '显示宠物', click: () => { petWindow.show(); if (tray) createTray(); } });
+      }
+      menuItems.push({ label: '彻底关闭宠物', click: () => closePet(true) });
+    } else {
+      // No pet window
+      menuItems.push({ label: '显示宠物', click: () => { createPetWindow(); if (tray) createTray(); } });
+    }
+
+    menuItems.push(
+      { type: 'separator' },
+      { label: '退出', click: () => { isQuitting = true; tray = null; app.quit(); } },
+    );
+    const contextMenu = Menu.buildFromTemplate(menuItems);
+    tray.setContextMenu(contextMenu);
+  }
+
+  buildTrayMenu();
   tray.setToolTip('GA Manager');
-  tray.setContextMenu(contextMenu);
   tray.on('double-click', () => { if (mainWindow) mainWindow.show(); else createWindow(); });
 }
 
@@ -301,6 +335,20 @@ ipcMain.handle('window-maximize', () => { if (mainWindow) { mainWindow.isMaximiz
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close(); });
 
 // --- Pet Window IPC ---
+ipcMain.on('pet-close', () => {
+  closePet(true);
+});
+
+// IPC for main window to toggle pet from UI
+ipcMain.on('pet-toggle', () => {
+  if (petWindow && !petWindow.isDestroyed()) {
+    closePet(true);
+  } else {
+    createPetWindow();
+  }
+  if (tray) createTray();
+});
+
 ipcMain.handle('pet-move-window', (_, x, y) => {
   if (petWindow) {
     petWindow.setPosition(Math.round(x), Math.round(y));

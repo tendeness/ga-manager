@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('petBridge', {
   // Window management
   moveWindow: (x, y) => ipcRenderer.invoke('pet-move-window', x, y),
   getPosition: () => ipcRenderer.invoke('pet-get-position'),
+  // Close pet window properly (destroy window, not just hide)
+  close: () => ipcRenderer.send('pet-close'),
   // Pet selection
   savePet: (petId) => ipcRenderer.invoke('pet-save-selection', petId),
   getSavedPet: () => ipcRenderer.invoke('pet-get-selection'),

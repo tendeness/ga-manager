@@ -1,38 +1,6 @@
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { memo } from 'react';
 
-const sakuraTheme: Record<string, React.CSSProperties> = {
-  'pre[class*="language-"]': { background: 'transparent', margin: 0, padding: '14px 16px', overflow: 'auto', fontSize: '12px', lineHeight: '1.6' },
-  'code[class*="language-"]': { background: 'transparent', fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: '12px' },
-  comment: { color: '#c4a0b0' },
-  prolog: { color: '#c4a0b0' },
-  doctype: { color: '#c4a0b0' },
-  cdata: { color: '#c4a0b0' },
-  punctuation: { color: '#8c5a6e' },
-  property: { color: '#e87da0' },
-  tag: { color: '#e87da0' },
-  boolean: { color: '#a78bfa' },
-  number: { color: '#a78bfa' },
-  constant: { color: '#a78bfa' },
-  symbol: { color: '#a78bfa' },
-  selector: { color: '#34d399' },
-  'attr-name': { color: '#fbbf24' },
-  string: { color: '#34d399' },
-  char: { color: '#34d399' },
-  builtin: { color: '#34d399' },
-  operator: { color: '#f0a0ba' },
-  entity: { color: '#f0a0ba' },
-  url: { color: '#f0a0ba' },
-  'attr-value': { color: '#34d399' },
-  keyword: { color: '#e87da0' },
-  function: { color: '#a78bfa' },
-  'class-name': { color: '#fbbf24' },
-  regex: { color: '#fbbf24' },
-  important: { color: '#fb7185' },
-  variable: { color: '#f0a0ba' },
-  italic: { fontStyle: 'italic' },
-  bold: { fontWeight: 'bold' },
-};
-
+// ── Diff block (lightweight, no syntax highlighting needed) ──
 function DiffBlock({ code }: { code: string }) {
   const lines = code.split('\n');
   return (
@@ -48,12 +16,46 @@ function DiffBlock({ code }: { code: string }) {
   );
 }
 
+// ── Simple code block (replaces heavy react-syntax-highlighter) ──
+// react-syntax-highlighter bundles the full PrismJS (~400KB+),
+// causing synchronous parser blocking on every render.
+// This lightweight version renders code instantly while preserving
+// formatting and monospace font.
+function SimpleCodeBlock({ code, lang }: { code: string; lang: string }) {
+  return (
+    <pre
+      className={`code-block language-${lang}`}
+      style={{
+        background: 'transparent',
+        margin: 0,
+        padding: '14px 16px',
+        overflow: 'auto',
+        fontSize: '12px',
+        lineHeight: '1.6',
+      }}
+    >
+      <code
+        className={`language-${lang}`}
+        style={{
+          fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+          fontSize: '12px',
+          color: 'var(--text-1, #e0d0e0)',
+        }}
+      >
+        {code}
+      </code>
+    </pre>
+  );
+}
+
+// ── Props ──
 interface CodeBlockProps {
   className?: string;
   children?: React.ReactNode;
 }
 
-export default function CodeBlock({ className, children }: CodeBlockProps) {
+// ── Component (memoized to avoid re-renders on parent updates) ──
+function CodeBlock({ className, children }: CodeBlockProps) {
   const code = String(children).replace(/\n$/, '');
   const match = /language-(\w+)/.exec(className || '');
   const lang = match ? match[1] : '';
@@ -66,14 +68,7 @@ export default function CodeBlock({ className, children }: CodeBlockProps) {
     return <code className="inline-code">{code}</code>;
   }
 
-  return (
-    <SyntaxHighlighter
-      language={lang}
-      style={sakuraTheme}
-      customStyle={{ background: 'transparent', padding: '14px 16px', margin: 0, borderRadius: 0 }}
-      codeTagProps={{ style: { fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: '12px' } }}
-    >
-      {code}
-    </SyntaxHighlighter>
-  );
+  return <SimpleCodeBlock code={code} lang={lang} />;
 }
+
+export default memo(CodeBlock);

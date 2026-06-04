@@ -12,6 +12,8 @@ function TopBar() {
   } = useStore();
   const { t, lang } = useI18n();
   const inst = getActiveInstance();
+  // Track pet visibility locally (or read from electronPet if available)
+  const [petVisible, setPetVisible] = useState(true);
 
   const [showLLMDropdown, setShowLLMDropdown] = useState(false);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
@@ -63,6 +65,15 @@ function TopBar() {
           )}
         </div>
         <div className="top-bar-right">
+          {/* Pet Toggle */}
+          {(window as any).electronPet && (
+            <button className="top-bar-ctrl-btn" onClick={() => {
+              (window as any).electronPet.toggle();
+              setPetVisible(!petVisible);
+            }} title={petVisible ? (lang === 'zh' ? '关闭宠物' : 'Close Pet') : (lang === 'zh' ? '显示宠物' : 'Show Pet')}>
+              {petVisible ? (lang === 'zh' ? '🐱' : '🐱') : (lang === 'zh' ? '🐱' : '🐱')}
+            </button>
+          )}
           <button className={`top-bar-ctrl-btn ${showTodoPanel ? 'active' : ''}`} onClick={toggleTodoPanel}>
             {lang === 'zh' ? '待办' : 'TODO'}{todos.filter(t => !t.done).length > 0 ? ` (${todos.filter(t => !t.done).length})` : ''}
           </button>
@@ -129,6 +140,15 @@ function TopBar() {
           </button>
         )}
 
+        {/* Pet Toggle */}
+        {(window as any).electronPet && (
+          <button className="top-bar-ctrl-btn" onClick={() => {
+            (window as any).electronPet.toggle();
+            setPetVisible(!petVisible);
+          }} title={petVisible ? (lang === 'zh' ? '关闭宠物' : 'Close Pet') : (lang === 'zh' ? '显示宠物' : 'Show Pet')}>
+            🐱
+          </button>
+        )}
         {/* TODO Toggle */}
         <button className={`top-bar-ctrl-btn ${showTodoPanel ? 'active' : ''}`} onClick={toggleTodoPanel}>
           {lang === 'zh' ? '待办' : 'TODO'}{todos.filter(t => !t.done).length > 0 ? ` (${todos.filter(t => !t.done).length})` : ''}

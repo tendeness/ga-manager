@@ -40,4 +40,5 @@ contextBridge.exposeInMainWorld('electronShell', {
 
 contextBridge.exposeInMainWorld('electronPet', {
   sendState: (state) => ipcRenderer.send('ga-state-change', state),
+  toggle: () => ipcRenderer.send('pet-toggle'),
 });

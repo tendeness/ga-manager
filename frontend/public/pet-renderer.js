@@ -248,11 +248,11 @@ if (window.petBridge) {
   });
 }
 
-// Toggle (hide) button
+// Toggle (close) button — properly close the pet window
 document.getElementById('toggle-btn').addEventListener('click', (e) => {
   e.stopPropagation();
   if (window.petBridge) {
-    window.petBridge.moveWindow(-9999, -9999); // Move off-screen to "hide"
+    window.petBridge.close(); // Properly close the pet window instead of hiding off-screen
   }
 });
 
