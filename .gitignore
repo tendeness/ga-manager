@@ -32,3 +32,4 @@ frontend/tsconfig.tsbuildinfo
 instances.json
 costs.json
 todos.json
+electron-asar-build

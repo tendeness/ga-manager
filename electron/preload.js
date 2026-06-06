@@ -37,7 +37,3 @@ contextBridge.exposeInMainWorld('electronWindow', {
 contextBridge.exposeInMainWorld('electronShell', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 });
-
-contextBridge.exposeInMainWorld('electronPet', {
-  sendState: (state) => ipcRenderer.send('ga-state-change', state),
-});

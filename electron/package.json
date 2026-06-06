@@ -35,7 +35,6 @@
     "files": [
       "main.js",
       "preload.js",
-      "pet-preload.js",
       "icon.ico",
       "icon.png"
     ],
@@ -65,7 +64,7 @@
           "to": "backend/ga-manager.exe"
         },
         {
-          "from": "../backend/static",
+          "from": "../backend/frontend_dist",
           "to": "backend/static"
         }
       ]
@@ -91,7 +90,7 @@
           "to": "backend/ga-manager"
         },
         {
-          "from": "../backend/static",
+          "from": "../backend/frontend_dist",
           "to": "backend/static"
         }
       ]
@@ -108,7 +107,7 @@
           "to": "backend/ga-manager"
         },
         {
-          "from": "../backend/static",
+          "from": "../backend/frontend_dist",
           "to": "backend/static"
         }
       ]
